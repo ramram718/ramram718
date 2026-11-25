@@ -127,14 +127,53 @@ def choose_airport(page, side: str, code: str) -> None:
     print(f"  {side}: {code}")
 
 
+MONTH_TEXT_RE = re.compile(r"(20\d\d)\s*[.\-/년]\s*(\d{1,2})")
+
+
+def _month_button(page):
+    # Name changes after selection ("탑승월 가는 달 … 오는 달 …"), so match the prefix.
+    return page.get_by_role("button", name=re.compile(r"^\s*탑승월")).first
+
+
+def _selected_months(page) -> list[tuple[int, int]]:
+    text = " ".join([_month_button(page).inner_text(), _month_button(page).get_attribute("aria-label") or ""])
+    return [(int(y), int(m)) for y, m in MONTH_TEXT_RE.findall(text)]
+
+
+def _click_month(page, m: date, which: str) -> None:
+    dialog = page.get_by_role("dialog").last
+    scope = dialog if dialog.count() and dialog.is_visible() else page
+    tab = scope.get_by_role("tab", name=re.compile(which))  # e.g. a "오는 달" tab, if the modal has one
+    if tab.count() and tab.first.is_visible():
+        force_click(page, tab.first, f"{which} 탭")
+        page.wait_for_timeout(500)
+    btn = scope.get_by_role("group", name=str(m.year)).get_by_role("button", name=f"{m.month}월", exact=True)
+    btn = btn.last if btn.count() > 1 else btn  # if 가는/오는 달 each have a month grid, the visible last one
+    btn.click()
+    page.wait_for_timeout(1000)  # let the modal switch from 가는 달 to 오는 달
+
+
 def choose_months(page, out_month: date, in_month: date) -> None:
-    page.get_by_role("button", name="탑승월 가는 달 오는 달").click()
-    for m in (out_month, in_month):
-        group = page.get_by_role("group", name=str(m.year))
-        group.get_by_role("button", name=f"{m.month}월", exact=True).click()
-        page.wait_for_timeout(300)
-    force_click(page, page.get_by_role("button", name="선택", exact=True), "선택")
-    print(f"  탑승월: 가는 달 {out_month:%Y-%m}, 오는 달 {in_month:%Y-%m}")
+    want = [(out_month.year, out_month.month), (in_month.year, in_month.month)]
+    for attempt in (1, 2):
+        _month_button(page).click()
+        page.wait_for_timeout(800)
+        _click_month(page, out_month, "가는 달")
+        _click_month(page, in_month, "오는 달")
+        force_click(page, page.get_by_role("button", name="선택", exact=True), "선택")
+        page.wait_for_timeout(800)
+        got = _selected_months(page)
+        shown = _month_button(page).inner_text().strip().replace("\n", " ")
+        print(f"  탑승월 버튼 표시: {shown!r}")
+        if len(got) >= 2 and got[:2] == want:
+            print(f"  탑승월 확인: 가는 달 {out_month:%Y-%m}, 오는 달 {in_month:%Y-%m}")
+            return
+        if len(got) < 2 and attempt == 1:
+            print("  !! 오는 달이 선택되지 않은 것 같아 다시 선택합니다")
+            continue
+        break
+    if got != want:
+        print(f"  !! 탑승월을 확인하지 못했습니다 (읽은 값 {got}); 조회 결과로 다시 확인합니다")
 
 
 def read_prestige_days_from_dom(page, month: date) -> dict[str, list[date]]:
@@ -193,6 +232,8 @@ def run_ui(origin: str = "ICN", dest: str = "CDG", out_month: date = date(2027, 
             end = time.time() + response_timeout_s
             while time.time() < end and len(responses) < 2:
                 page.wait_for_timeout(500)
+            if len(responses) == 1:
+                print("  !! bonusSeatView 응답이 1건뿐입니다 — 오는 달이 선택되지 않았을 수 있습니다")
             return [r for r in responses]
 
         try:

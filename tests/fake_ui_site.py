@@ -19,7 +19,7 @@ dialog{display:block} [hidden]{display:none!important}</style></head><body>
 <main id=main hidden><h1 id=title>보너스 좌석 조회</h1>
 <button aria-label="From 출발지" onclick="openAp('from')">출발지</button>
 <button aria-label="To 도착지" onclick="openAp('to')">도착지</button>
-<button aria-label="탑승월 가는 달 오는 달" onclick="mon.hidden=false">탑승월</button>
+<button id=monbtn onclick="mon.hidden=false;st.months=[]">탑승월<br>가는 달<br> ~ <br>오는 달</button>
 <kds-button_1 id=search role=button aria-label="조회"><span>조회</span><span class=shield></span></kds-button_1>
 <div id=result></div></main>
 <div id=ap hidden role=dialog><input role=combobox id=apq oninput="opts()"><ul role=listbox id=apl></ul></div>
@@ -32,11 +32,13 @@ let side, st={from:null,to:null,months:[]};
 setTimeout(()=>{loader.hidden=true;main.hidden=false;if(location.search.includes('broken'))title.remove(),document.querySelector('[aria-label="From 출발지"]').remove()},3000);
 function openAp(s){side=s;ap.hidden=false;apq.value='';apq.setAttribute('aria-label',s=='from'?'출발지 검색':'도착지 검색');apl.innerHTML=''}
 function opts(){apl.innerHTML='';for(const[k,v]of Object.entries(AP)){if(v.includes(apq.value.toUpperCase())){const li=document.createElement('li');li.setAttribute('role','option');li.textContent=v;li.onclick=()=>{st[side]=k;ap.hidden=true};apl.append(li)}}}
-document.querySelectorAll('[aria-label="2027"] button').forEach(b=>b.onclick=()=>st.months.push(2027*100+parseInt(b.textContent)));
-for(const el of [search, sel]){el.addEventListener('click',e=>{ if(!e.isTrusted&&false)return; el.dataset.hit=1; (el===sel?()=>{mon.hidden=true}:doSearch)()})}
+let busy=false;  // after picking 가는 달 the grid re-renders for 오는 달; clicks meanwhile are lost
+document.querySelectorAll('[aria-label="2027"] button').forEach(b=>b.onclick=()=>{if(busy||st.months.length>=2)return;st.months.push(2027*100+parseInt(b.textContent));busy=true;setTimeout(()=>busy=false,600)});
+const fmtM=m=>`${String(m).slice(0,4)}.${String(m).slice(4)}`;
+for(const el of [search, sel]){el.addEventListener('click',e=>{ if(!e.isTrusted&&false)return; el.dataset.hit=1; (el===sel?()=>{mon.hidden=true;monbtn.innerHTML=`탑승월<br>${st.months[0]?fmtM(st.months[0]):'가는 달'}<br> ~ <br>${st.months[1]?fmtM(st.months[1]):'오는 달'}`}:doSearch)()})}
 async function doSearch(){
-  const [om,im]=st.months.slice(-2); const ymd=m=>String(m)+'01';
-  const legs=[[st.from,st.to,om],[st.to,st.from,im]]; const res=[];
+  const [om,im]=st.months; const ymd=m=>String(m)+'01';
+  const legs=[[st.from,st.to,om]].concat(im?[[st.to,st.from,im]]:[]); const res=[];
   for(const[o,t,m]of legs){const r=await fetch('/api/hmp/bonusSeatView/bonusSeatView',{method:'POST',headers:{'Content-Type':'application/json',ksessionId:'K',channel:'pc'},body:JSON.stringify({arrivalAirport:t,departureAirport:o,departureDate:ymd(m)})});res.push(r.ok?await r.json():null)}
   if(!res[0])return; result.innerHTML='<div role=tablist><button role=tab>가는 날</button><button role=tab>오는 날</button></div><div id=cal></div>';
   const tabs=result.querySelectorAll('[role=tab]'); const show=i=>{cal.innerHTML='';for(const d of res[i].flightList){const day=+d.departureDate.slice(6);const kinds=[...new Set(d.flightDetailList.filter(x=>x.availableSeat).map(x=>({E:'일반석 보너스',P:'프레스티지석 보너스',U:'프레스티지석 좌석승급'})[x.frontBookingClass]))];const b=document.createElement('button');const wd='일월화수목금토'[new Date(d.departureDate.slice(0,4),d.departureDate.slice(4,6)-1,day).getDay()];b.setAttribute('aria-label',`${day}일, ${wd}요일 ${kinds.join(' ')}`);b.textContent=day;cal.append(b)}};
