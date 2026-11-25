@@ -26,14 +26,14 @@ python -m kal_award capture
 
 ## 2. 구조 분석
 ```bash
-python -m kal_award analyze captures/<시각>
+python -m kal_award analyze            # 폴더 생략 시 가장 최근 캡처
 ```
 날짜 값이 많은 응답 순으로 엔드포인트, 요청 본문, 응답 구조 트리를 출력하고,
 `날짜 키 / 가용성 키 / 등급 키 / 출발·도착 키`를 자동 추정해 근거(값 분포, 샘플 레코드)와 함께 보여 줍니다.
 
 ## 3. 날짜 출력 + 왕복 매칭
 ```bash
-python -m kal_award dates captures/<시각> --from 2027-08-01 --min-stay 7 --max-stay 14
+python -m kal_award dates --from 2027-08-01 --min-stay 7 --max-stay 14
 ```
 자동 추정이 맞는지 확인했으면 `field_map.example.json`을 복사해 실제 키 이름으로 고친 뒤
 `--map field_map.json`으로 고정하세요. 그러면 추정 없이 그 필드만 읽습니다.

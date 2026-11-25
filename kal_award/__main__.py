@@ -28,10 +28,21 @@ def cmd_capture(a):
     caps = load_captures(run)
     print(describe(caps))
     if caps:
-        print(f"\n다음 단계: python -m kal_award dates {run}")
+        print("\n다음 단계: python -m kal_award analyze")
+
+
+def latest_run(arg: str | None) -> Path:
+    if arg:
+        return Path(arg)
+    runs = sorted(p for p in Path("captures").glob("*") if p.is_dir())
+    if not runs:
+        sys.exit("captures 폴더에 캡처가 없습니다. 먼저 `python -m kal_award capture`를 실행하세요.")
+    print(f"(가장 최근 캡처 사용: {runs[-1]})")
+    return runs[-1]
 
 
 def cmd_analyze(a):
+    a.run = latest_run(a.run)
     caps = load_captures(Path(a.run))
     if not caps:
         sys.exit(f"no captures in {a.run}")
@@ -48,6 +59,7 @@ def cmd_analyze(a):
 
 
 def cmd_dates(a):
+    a.run = latest_run(a.run)
     caps = load_captures(Path(a.run))
     fm = FieldMap.load(Path(a.map)) if a.map else detect_field_map(caps)
     if not fm:
@@ -91,7 +103,7 @@ def main(argv=None):
             p.add_argument("--no-autofill", action="store_true")
             p.set_defaults(fn=cmd_capture)
         else:
-            p.add_argument("run")
+            p.add_argument("run", nargs="?", help="캡처 폴더 (생략 시 가장 최근)")
         if name == "analyze":
             p.add_argument("--top", type=int, default=3)
             p.set_defaults(fn=cmd_analyze)

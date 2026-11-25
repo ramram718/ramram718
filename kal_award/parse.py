@@ -143,13 +143,27 @@ def date_bearing_score(body: Any) -> int:
 
 
 def describe(captures: list[dict], top: int = 3) -> str:
-    lines = ["=== captured endpoints (date-like values per response) ==="]
-    ranked = sorted(captures, key=lambda r: -date_bearing_score(r["response_json"]))
+    lines = []
+    errs = [r for r in captures if r["status"] >= 400 or r.get("response_json") is None]
+    if errs:
+        lines.append("=== !! 에러/비-JSON 응답 (조회가 차단됐다면 여기에 나옵니다) ===")
+        for r in errs:
+            prev = (r.get("response_text_preview") or "").replace("\n", " ")[:200]
+            lines.append(f"{r['_file']}  {r['method']:4} {r['status']}  {r['url'][:120]}\n      {prev}")
+    cands = [r for r in captures if AWARD_URL_RE.search(r["url"]) and not UI_URL_RE.search(r["url"])]
+    lines.append("\n=== 보너스 좌석 후보 엔드포인트 (URL 기준) ===")
+    lines += [f"{r['_file']}  {r['method']:4} {r['status']}  {r['url'][:140]}" for r in cands] or [
+        "(없음) — 조회 결과 API가 캡처되지 않았습니다."]
+    body_caps = [r for r in captures if r.get("response_json") is not None and not UI_URL_RE.search(r["url"])]
+    lines.append("\n=== 기타 API 응답 (날짜 값 개수순, UI/메뉴 제외) ===")
+    ranked = sorted(body_caps, key=lambda r: -date_bearing_score(r["response_json"]))
     for r in ranked:
         lines.append(f"{r['_file']}  {r['method']:4} {r['status']}  dates={date_bearing_score(r['response_json']):4}  {r['url'][:120]}")
-    for r in ranked[:top]:
-        if not date_bearing_score(r["response_json"]):
-            break
+    shown = list(dict.fromkeys(id(r) for r in cands + ranked))
+    by_id = {id(r): r for r in captures}
+    for r in [by_id[i] for i in shown][:top]:
+        if r.get("response_json") is None:
+            continue
         lines.append(f"\n--- {r['_file']}  {r['method']} {r['url']}")
         if r.get("request_post_data"):
             lines.append("request body: " + str(r["request_post_data"])[:800])
@@ -175,13 +189,24 @@ class FieldMap:
         return cls(**json.loads(Path(p).read_text(encoding="utf-8")))
 
 
-def detect_field_map(captures: list[dict]) -> FieldMap | None:
-    """Score (record_path, date_key, avail_key) combos across all records."""
+UI_URL_RE = re.compile(r"(/uiCommon/|/api/hmp/|getHoliDeInfo|getGdprData|languageInfo|seoInfo)", re.I)
+AWARD_URL_RE = re.compile(r"(award|bonus|mileage|avail|calendar|lowest|seat|redemption|skypass)", re.I)
+
+
+def detect_field_map(captures: list[dict], today: date | None = None) -> FieldMap | None:
+    """Score (record_path, date_key, avail_key) combos across all records.
+
+    Only future dates count: seat availability is about upcoming flights,
+    while menus/notices carry past `updateDate`-style stamps.
+    """
+    today = today or date.today()
     stats: dict[tuple, dict] = defaultdict(lambda: {"n": 0, "vals": Counter(), "keys": Counter(),
                                                    "anc_keys": Counter(), "samples": []})
     for cap in captures:
+        if cap.get("response_json") is None or UI_URL_RE.search(cap["url"]):
+            continue
         for path, rec, anc in flat_records(cap["response_json"]):
-            dkeys = [k for k, v in rec.items() if parse_date(v)]
+            dkeys = [k for k, v in rec.items() if (d := parse_date(v)) and d >= today]
             if not dkeys:
                 continue
             dkeys.sort(key=lambda k: (not DATE_KEY_RE.search(k), len(k)))
@@ -246,6 +271,8 @@ def extract(captures: list[dict], fm: FieldMap, origin: str = "ICN", dest: str =
     cab_re = re.compile(fm.cabin_match, re.I) if fm.cabin_match else None
     out: dict[str, dict[date, bool]] = defaultdict(dict)
     for cap in captures:
+        if cap.get("response_json") is None:
+            continue
         req_dir = _route_from_request(cap, origin, dest)
         for path, rec, anc in flat_records(cap["response_json"]):
             if fm.record_path and path != fm.record_path:

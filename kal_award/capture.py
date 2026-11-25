@@ -20,8 +20,11 @@ from pathlib import Path
 
 URL = "https://www.koreanair.com/booking/book-and-manage/award-seat-availability"
 HOST_RE = re.compile(r"^https://([a-z0-9-]+\.)*koreanair\.com/", re.I)
-# Static/analytics responses that are never availability data.
-NOISE_RE = re.compile(r"(analytics|adobe|gtm|tag|log|i18n|message|banner|notice|\.js|\.css)", re.I)
+# Responses that are never availability data: static files, UI text/menus,
+# and the bot-manager sensor posts (long random path, no /api/).
+NOISE_RE = re.compile(
+    r"(\.(js|css|png|jpe?g|svg|gif|woff2?|ico)$|/uiCommon/c/i/languageInfo/|/api/hmp/main/|/_sec/)", re.I)
+SENSOR_RE = re.compile(r"^https://[^/]+/[A-Za-z0-9_-]{15,}/")
 
 
 @dataclass
@@ -92,10 +95,13 @@ def capture(out_dir: Path, headless: bool = False, autofill: bool = True,
 
         def on_response(resp):
             rt = resp.request.resource_type
-            if rt in ("xhr", "fetch") and HOST_RE.match(resp.url) and not NOISE_RE.search(resp.url.split("?")[0]):
+            url = resp.url.split("?")[0]
+            if rt in ("xhr", "fetch", "document") and HOST_RE.match(url) \
+                    and not NOISE_RE.search(url) and not SENSOR_RE.match(url):
                 pending.append(resp)
 
-        page.on("response", on_response)
+        # Listen on the whole context so results opened in new tabs/popups count too.
+        ctx.on("response", on_response)
         resp = page.goto(URL, wait_until="domcontentloaded", timeout=60000)
         status = resp.status if resp else None
         print(f"page status: {status}")
@@ -130,10 +136,17 @@ def capture(out_dir: Path, headless: bool = False, autofill: bool = True,
 
 
 def _save(resp, run_dir: Path, idx: int) -> int:
+    """Save JSON bodies; for non-JSON (e.g. a block page) keep a text preview."""
+    body, preview = None, None
     try:
         body = resp.json()
     except Exception:
-        return 0  # not JSON
+        if resp.request.resource_type == "document" and resp.status < 400:
+            return 0  # ordinary page navigation
+        try:
+            preview = resp.text()[:600]
+        except Exception:
+            preview = "<body unavailable>"
     req = resp.request
     rec = {
         "url": resp.url,
@@ -142,8 +155,12 @@ def _save(resp, run_dir: Path, idx: int) -> int:
         "resource_type": req.resource_type,
         "request_post_data": req.post_data,
         "response_json": body,
+        "response_text_preview": preview,
     }
     path = run_dir / f"{idx:03d}.json"
     path.write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"  captured {path.name}: {req.method} {resp.status} {resp.url[:110]}")
+    flag = "" if body is not None else "  (NOT JSON)"
+    if resp.status >= 400:
+        flag += "  !! ERROR STATUS"
+    print(f"  captured {path.name}: {req.method} {resp.status} {resp.url[:110]}{flag}")
     return 1

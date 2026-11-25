@@ -88,3 +88,23 @@ def test_cli_dates(tmp_path, capsys):
     main(["dates", str(tmp_path)])
     out = capsys.readouterr().out
     assert "프레스티지 가능 3일" in out and "2027-08-03(화) → 2027-08-12(목)  (9박)" in out
+
+
+def test_menu_and_blocked_search_not_misdetected(tmp_path):
+    """Regression for the first real run: only menus/holidays plus a blocked
+    (non-JSON) search came back. Must not pick menu `updateDate`/`menuYn`,
+    and must surface the blocked call."""
+    from kal_award.parse import describe
+    menu = {"gnb": {"menuList": [{"menuYn": "Y" if i % 9 else "N", "updateDate": "2024-07-29 17:10",
+                                  "menuText": f"m{i}"} for i in range(50)]}}
+    _write(tmp_path, 0, "https://www.koreanair.com/api/hmp/main/getGnb?country=kr", menu)
+    _write(tmp_path, 1, "https://www.koreanair.com/api/et/uiCommon/c/g/getHoliDeInfo?year=2027",
+           {"holiDayItems": [{"date": "20270101", "dateName": "x"}]})
+    rec = {"url": "https://www.koreanair.com/api/award/search", "method": "POST", "status": 403,
+           "resource_type": "xhr", "request_post_data": "{}", "response_json": None,
+           "response_text_preview": "<HTML>Access Denied</HTML>"}
+    (tmp_path / "002.json").write_text(json.dumps(rec), encoding="utf-8")
+    caps = load_captures(tmp_path)
+    assert detect_field_map(caps, today=date(2026, 11, 25)) is None
+    text = describe(caps)
+    assert "Access Denied" in text and "002.json" in text
