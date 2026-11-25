@@ -15,7 +15,24 @@ Playwright로 [보너스 좌석 조회 페이지](https://www.koreanair.com/book
 > `Access Denied`를 반환해 접속하지 못했습니다. 아래 1~3단계를 **본인 PC(가정용 IP, 실제 브라우저 창)**에서
 > 실행해 실제 필드를 확인해야 합니다. 테스트(`tests/`)는 임의로 만든 가상 응답으로 로직만 검증합니다.
 
-## 빠른 사용법 (자동 조회) ★
+## 화면 조작 방식 (권장) ★
+```bash
+pip install -r requirements.txt
+python -m playwright install chromium
+python -m kal_award ui                                   # ICN↔CDG, 2027-09, 프레스티지석 보너스
+python -m kal_award ui --out-month 2027-09 --in-month 2027-10
+```
+1. 로딩("잠시만 기다려 주세요")이 끝나 **보너스 좌석 조회** 제목이 보일 때까지 대기
+2. From 출발지 → `ICN` → "서울/인천, 대한민국 ICN" / To 도착지 → `CDG` → "파리/샤를 드 골, 프랑스 CDG"
+3. 탑승월 → 2027 그룹의 9월(가는 달), 9월(오는 달) → 선택 → 조회 (`kds-button_1`이라 force 클릭)
+4. 페이지가 보내는 `bonusSeatView` 응답 2건(가는 편/오는 편)을 가로채 `captures/<시각>-ui/`에 저장
+5. 응답 구조, **프레스티지석 보너스(P)** 가능 날짜(좌석승급 U 제외), 7~14박 왕복 조합 출력
+6. 화면의 날짜 버튼 라벨("…프레스티지석 보너스…")과 API 결과를 대조해 일치 여부 출력
+
+로그인이 안 되어 있으면 안내가 나옵니다. 브라우저 창에서 로그인한 뒤 터미널에서 Enter → 자동 재조회.
+로그인은 `.browser_profile/`에 저장되어 다음부터는 생략됩니다.
+
+## 월별 API 자동 조회 (대안)
 ```bash
 pip install -r requirements.txt
 python -m playwright install chromium

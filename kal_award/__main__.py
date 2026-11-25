@@ -1,5 +1,6 @@
 """CLI.
 
+  python -m kal_award ui      [--out-month 2027-09 --in-month 2027-09]   # 화면 조작으로 조회
   python -m kal_award auto    [--origin ICN --dest CDG --from 2027-08-01]   # 자동 조회 + 결과 출력
   python -m kal_award import  kal_bonus_....json                            # 콘솔 스니펫 결과 가져오기
   python -m kal_award capture [--headless] [--no-autofill]
@@ -58,6 +59,39 @@ def cmd_auto(a):
                  "자동화 브라우저가 막혔다면 README의 '콘솔 스니펫' 방법을 사용하세요.")
     a.run = str(run)
     cmd_dates(a)
+
+
+def cmd_ui(a):
+    from . import bonusseat
+    from .parse import schema
+    from .ui_search import run_ui
+    om = date.fromisoformat(a.out_month + "-01")
+    im = date.fromisoformat((a.in_month or a.out_month) + "-01")
+    try:
+        run, dom = run_ui(a.origin, a.dest, om, im, headless=a.headless)
+    except RuntimeError as e:
+        sys.exit(f"\n!! {e}")
+    caps = [c for c in load_captures(run) if bonusseat.is_bonus_capture(c)]
+    print(f"\n=== bonusSeatView 응답 {len(caps)}건 저장: {run} ===")
+    for c in caps:
+        print(f"요청: {c['request_post_data']}")
+    if caps:
+        print("응답 구조 (첫 번째):")
+        print(schema(caps[0]["response_json"]))
+    a.run, a.date_from, a.date_to = str(run), None, None
+    cmd_dates(a)
+    if dom:
+        avail, _ = bonusseat.parse(caps, "P")
+        print("\n=== 화면(버튼 라벨) 대조: '프레스티지석 보너스' ===")
+        for tab, key in (("가는 날", f"{a.origin}-{a.dest}"), ("오는 날", f"{a.dest}-{a.origin}")):
+            api_days = sorted(avail.get(key, {}))
+            dom_days = dom.get(tab)
+            if dom_days is None:
+                print(f"  {tab}: 탭을 읽지 못함")
+            elif dom_days == api_days:
+                print(f"  {tab}: 일치 ({len(dom_days)}일)")
+            else:
+                print(f"  {tab}: !! 불일치 API={[d.day for d in api_days]} 화면={[d.day for d in dom_days]}")
 
 
 def cmd_import(a):
@@ -152,11 +186,17 @@ def _result_args(p):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="kal_award")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("auto", "import", "capture", "analyze", "dates"):
+    for name in ("ui", "auto", "import", "capture", "analyze", "dates"):
         p = sub.add_parser(name)
         p.add_argument("--origin", default="ICN")
         p.add_argument("--dest", default="CDG")
-        if name == "auto":
+        if name == "ui":
+            _result_args(p)
+            p.add_argument("--out-month", default="2027-09", help="가는 달 YYYY-MM")
+            p.add_argument("--in-month", help="오는 달 YYYY-MM (생략 시 가는 달과 같음)")
+            p.add_argument("--headless", action="store_true")
+            p.set_defaults(fn=cmd_ui)
+        elif name == "auto":
             _result_args(p)
             p.add_argument("--delay", type=float, default=2.0, help="요청 간격(초), 최소 1")
             p.set_defaults(fn=cmd_auto)
