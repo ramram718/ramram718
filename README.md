@@ -4,7 +4,14 @@ Playwright로 [보너스 좌석 조회 페이지](https://www.koreanair.com/book
 열어 조회 시 오가는 XHR/Fetch JSON을 저장하고, 그 안에서 날짜별 좌석 유무 필드를 찾아
 가는 날/오는 날 가능 날짜와 7~14박 왕복 조합을 출력합니다.
 
-> ⚠️ 실제 응답 스키마는 아직 검증되지 않았습니다. 개발용 클라우드 환경에서는 사이트(Akamai)가
+## 확인된 API (실제 HAR 캡처 기준)
+- `POST https://www.koreanair.com/api/hmp/bonusSeatView/bonusSeatView` — **로그인 필요**
+- 요청: `{"arrivalAirport":"CDG","departureAirport":"ICN","departureDate":"20270801"}` → 해당 월 전체, 한 방향
+- 응답: `flightList[].departureDate` × `flightDetailList[]{flightNumber, departureTime, availableSeat, bookingClass, frontBookingClass}`
+- 좌석 등급 `frontBookingClass/bookingClass`: `E/X` 일반석, `P/O` 프레스티지, `F/A` 일등석, `U/Z` 미확인
+- 상세: `kal_award/bonusseat.py`
+
+> ⚠️ (이전 메모) 아래 자동 캡처 방식은 클라우드 환경에서 검증되지 않았습니다. 개발용 클라우드 환경에서는 사이트(Akamai)가
 > `Access Denied`를 반환해 접속하지 못했습니다. 아래 1~3단계를 **본인 PC(가정용 IP, 실제 브라우저 창)**에서
 > 실행해 실제 필드를 확인해야 합니다. 테스트(`tests/`)는 임의로 만든 가상 응답으로 로직만 검증합니다.
 

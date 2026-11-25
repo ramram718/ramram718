@@ -131,3 +131,36 @@ def test_har_import(tmp_path, monkeypatch):
     run = import_har(har, tmp_path / "captures")
     assert len(list(run.glob("*.json"))) == 2
     check(run)
+
+
+def _bonus(o, t, start, n, open_days):
+    """Same schema as the real bonusSeatView response (values synthetic)."""
+    fl = []
+    for i in range(n):
+        d = start + timedelta(i)
+        det = [{"departureTime": "12:05", "flightNumber": "KE901", "availableSeat": True,
+                "bookingClass": "X", "frontBookingClass": "E"},
+               {"departureTime": "12:05", "flightNumber": "KE901", "availableSeat": d in open_days,
+                "bookingClass": "O", "frontBookingClass": "P"},
+               {"departureTime": "12:05", "flightNumber": "KE901", "availableSeat": True,
+                "bookingClass": "Z", "frontBookingClass": "U"}]
+        fl.append({"departureDate": d.strftime("%Y%m%d"), "flightDetailList": det})
+    return {"departureAirport": o, "arrivalAirport": t, "departureAirportName": "", "arrivalAirportName": "",
+            "flightList": fl}
+
+
+def test_bonusseat_endpoint(tmp_path, capsys):
+    url = "https://www.koreanair.com/api/hmp/bonusSeatView/bonusSeatView"
+    _write(tmp_path, 0, url, _bonus("ICN", "CDG", date(2027, 8, 1), 31, {date(2027, 8, 3)}),
+           post='{"arrivalAirport":"CDG","departureAirport":"ICN","departureDate":"20270801"}')
+    _write(tmp_path, 1, url, _bonus("CDG", "ICN", date(2027, 8, 1), 31, {date(2027, 8, 12), date(2027, 8, 30)}),
+           post='{"arrivalAirport":"ICN","departureAirport":"CDG","departureDate":"20270801"}')
+    main(["dates", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert "프레스티지 가능 1일" in out and "프레스티지 가능 2일" in out
+    assert "2027-08-03(화)  KE901 12:05" in out
+    assert "2027-08-03(화) → 2027-08-12(목)  (9박)" in out
+    assert "2027-08-30" in out and "왕복 조합] 체류 7~14일: 1건" in out
+    # 'U' rows are open every day but must not leak into prestige
+    main(["dates", str(tmp_path), "--cabin", "U"])
+    assert "가능 31일" in capsys.readouterr().out

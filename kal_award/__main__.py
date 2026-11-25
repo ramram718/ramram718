@@ -64,33 +64,48 @@ def cmd_analyze(a):
         print("  sample:", s)
 
 
+def _months(days) -> list[str]:
+    return sorted({d.strftime("%Y-%m") for d in days})
+
+
 def cmd_dates(a):
+    from . import bonusseat
     a.run = latest_run(a.run)
     caps = load_captures(Path(a.run))
-    fm = FieldMap.load(Path(a.map)) if a.map else detect_field_map(caps)
-    if not fm:
-        sys.exit("field map을 찾지 못했습니다. `analyze`로 구조를 확인하세요.")
-    if not a.map:
-        print("(auto-detected map — 실제 필드인지 analyze 출력으로 확인 후 --map으로 고정 권장)")
-        print(fm_to_json(fm))
-    start = date.fromisoformat(a.date_from) if a.date_from else None
-    end = date.fromisoformat(a.date_to) if a.date_to else None
-    res = extract(caps, fm, a.origin, a.dest, start, end)
-
+    start = date.fromisoformat(a.date_from) if a.date_from else date.min
+    end = date.fromisoformat(a.date_to) if a.date_to else date.max
     fwd, rev = f"{a.origin}-{a.dest}", f"{a.dest}-{a.origin}"
-    for k in res:
-        if k not in (fwd, rev):
-            print(f"\n!! 방향을 판별하지 못한 레코드 {len(res[k])}건 ({k}). field map에 origin_key/dest_key 지정 필요.")
-    out_days = sorted(d for d, ok in res.get(fwd, {}).items() if ok)
-    in_days = sorted(d for d, ok in res.get(rev, {}).items() if ok)
-    for name, key, days in (("가는 날", fwd, out_days), ("오는 날", rev, in_days)):
-        checked = res.get(key, {})
-        span = f"{min(checked)} ~ {max(checked)}" if checked else "-"
-        print(f"\n[{name} {key}] 조회된 날짜 {len(checked)}일 ({span}), 프레스티지 가능 {len(days)}일")
-        for d in days:
-            print("  ", fmt(d))
+    cabin_name = {"P": "프레스티지", "E": "일반석", "F": "일등석"}.get(a.cabin, a.cabin)
 
-    trips = round_trips(out_days, in_days, a.min_stay, a.max_stay)
+    if any(bonusseat.is_bonus_capture(c) for c in caps):
+        avail, covered = bonusseat.parse(caps, a.cabin)
+        print(f"(bonusSeatView API 응답 {sum(bonusseat.is_bonus_capture(c) for c in caps)}건 사용, 좌석 등급 코드 {a.cabin})")
+    else:  # unknown schema: generic detection
+        fm = FieldMap.load(Path(a.map)) if a.map else detect_field_map(caps)
+        if not fm:
+            sys.exit("보너스 좌석 응답을 찾지 못했습니다. 로그인 후 조회했는지 확인하고 `analyze`를 실행해 보세요.")
+        res = extract(caps, fm, a.origin, a.dest)
+        avail = {k: {d: [] for d, ok in v.items() if ok} for k, v in res.items()}
+        covered = {k: set(v) for k, v in res.items()}
+
+    picked = {}
+    for name, key in (("가는 날", fwd), ("오는 날", rev)):
+        cov = sorted(d for d in covered.get(key, ()) if start <= d <= end)
+        days = sorted(d for d in avail.get(key, {}) if start <= d <= end)
+        picked[key] = days
+        span = f"{cov[0]} ~ {cov[-1]}" if cov else "-"
+        print(f"\n[{name} {key}] 조회된 날짜 {len(cov)}일 ({span}; 월: {', '.join(_months(cov)) or '없음'})"
+              f", {cabin_name} 가능 {len(days)}일")
+        for d in days:
+            fl = avail[key][d]
+            extra = "  " + ", ".join(f"{f.flight_number} {f.departure_time}" for f in fl) if fl else ""
+            print(f"   {fmt(d)}{extra}")
+    out_m, in_m = set(_months(covered.get(fwd, ()))), set(_months(covered.get(rev, ())))
+    if out_m != in_m:
+        print(f"\n!! 가는 편/오는 편 조회 월이 다릅니다. 가는 편만: {sorted(out_m - in_m) or '-'}"
+              f", 오는 편만: {sorted(in_m - out_m) or '-'}  → 빠진 달도 달력에서 넘겨 캡처해야 왕복 매칭이 정확합니다.")
+
+    trips = round_trips(picked[fwd], picked[rev], a.min_stay, a.max_stay)
     print(f"\n[왕복 조합] 체류 {a.min_stay}~{a.max_stay}일: {len(trips)}건")
     for o, b, n in trips:
         print(f"   {fmt(o)} → {fmt(b)}  ({n}박)")
@@ -119,6 +134,7 @@ def main(argv=None):
             p.add_argument("--to", dest="date_to")
             p.add_argument("--min-stay", type=int, default=7)
             p.add_argument("--max-stay", type=int, default=14)
+            p.add_argument("--cabin", default="P", help="frontBookingClass: P=프레스티지, E=일반석, F=일등석")
             p.set_defaults(fn=cmd_dates)
     ph = sub.add_parser("har", help="크롬 개발자도구에서 저장한 HAR 파일 가져오기")
     ph.add_argument("har")

@@ -189,7 +189,7 @@ class FieldMap:
         return cls(**json.loads(Path(p).read_text(encoding="utf-8")))
 
 
-UI_URL_RE = re.compile(r"(/uiCommon/|/api/hmp/|getHoliDeInfo|getGdprData|languageInfo|seoInfo)", re.I)
+UI_URL_RE = re.compile(r"(/uiCommon/|/api/hmp/main/|getHoliDeInfo|getGdprData|languageInfo|seoInfo)", re.I)
 AWARD_URL_RE = re.compile(r"(award|bonus|mileage|avail|calendar|lowest|seat|redemption|skypass)", re.I)
 
 
