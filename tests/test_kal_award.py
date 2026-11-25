@@ -164,3 +164,52 @@ def test_bonusseat_endpoint(tmp_path, capsys):
     # 'U' rows are open every day but must not leak into prestige
     main(["dates", str(tmp_path), "--cabin", "U"])
     assert "가능 31일" in capsys.readouterr().out
+
+
+def test_fetch_direction_stops_at_window_end(tmp_path, capsys):
+    """Fake server: window ends 2027-11-23. Must request Aug..Nov then stop."""
+    from kal_award.fetcher import fetch_direction, save_records
+    calls = []
+
+    def post(body):
+        req = json.loads(body)
+        calls.append(req)
+        first = datetime_date(req["departureDate"])
+        last_day = min(date(2027, 11, 23), (first.replace(day=28) + timedelta(4)).replace(day=1) - timedelta(1))
+        n = (last_day - first).days + 1
+        opened = {date(2027, 11, 20)} if req["departureAirport"] == "ICN" else {date(2027, 11, 30)}
+        return 200, json.dumps(_bonus(req["departureAirport"], req["arrivalAirport"], first, max(n, 0), opened))
+
+    recs = fetch_direction(post, "ICN", "CDG", date(2027, 8, 1), sleep=lambda s: None)
+    assert [c["departureDate"] for c in calls] == ["20270801", "20270901", "20271001", "20271101"]
+    assert calls[0] == {"arrivalAirport": "CDG", "departureAirport": "ICN", "departureDate": "20270801"}
+    run = save_records(recs, tmp_path / "run")
+    from kal_award.bonusseat import parse
+    avail, covered = parse(load_captures(run))
+    assert list(avail["ICN-CDG"]) == [date(2027, 11, 20)] and max(covered["ICN-CDG"]) == date(2027, 11, 23)
+
+
+def test_fetch_direction_stops_on_refusal():
+    import pytest
+    from kal_award.fetcher import FetchError, fetch_direction
+    with pytest.raises(FetchError, match="HTTP 403"):
+        fetch_direction(lambda b: (403, "<HTML>Access Denied</HTML>"), "ICN", "CDG", date(2027, 8, 1),
+                        sleep=lambda s: None)
+
+
+def test_import_snippet_json(tmp_path, monkeypatch, capsys):
+    url = "https://www.koreanair.com/api/hmp/bonusSeatView/bonusSeatView"
+    recs = [{"url": url, "method": "POST", "status": 200, "resource_type": "fetch",
+             "request_post_data": "{}", "response_json": _bonus(o, t, date(2027, 8, 1), 31, ok),
+             "response_text_preview": None}
+            for o, t, ok in (("ICN", "CDG", {date(2027, 8, 3)}), ("CDG", "ICN", {date(2027, 8, 12)}))]
+    f = tmp_path / "kal_bonus.json"
+    f.write_text(json.dumps({"records": recs}), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    main(["import", str(f)])
+    out = capsys.readouterr().out
+    assert "2027-08-03(화) → 2027-08-12(목)  (9박)" in out
+
+
+def datetime_date(s):
+    return date(int(s[:4]), int(s[4:6]), int(s[6:]))

@@ -15,6 +15,24 @@ Playwright로 [보너스 좌석 조회 페이지](https://www.koreanair.com/book
 > `Access Denied`를 반환해 접속하지 못했습니다. 아래 1~3단계를 **본인 PC(가정용 IP, 실제 브라우저 창)**에서
 > 실행해 실제 필드를 확인해야 합니다. 테스트(`tests/`)는 임의로 만든 가상 응답으로 로직만 검증합니다.
 
+## 빠른 사용법 (자동 조회) ★
+```bash
+pip install -r requirements.txt
+python -m playwright install chromium
+python -m kal_award auto
+```
+- 브라우저 창이 열립니다. **처음 한 번만 SKYPASS 로그인** → 이후 자동으로 가는 편·오는 편을 월별로 조회
+  (2027-08부터 예약 가능 마지막 날까지, 요청 간격 2초)하고 결과를 바로 출력합니다.
+- 로그인은 `.browser_profile/`에 남아서 다음 실행부터는 명령 한 줄이면 끝납니다.
+- 옵션: `--origin ICN --dest CDG --from 2027-08-01 --min-stay 7 --max-stay 14 --cabin P --delay 2`
+
+### 자동화 브라우저가 막힐 때: 콘솔 스니펫 (평소 쓰는 크롬)
+1. 평소 크롬으로 보너스 좌석 조회 페이지에 로그인
+2. F12 → **Console** 탭 → `kal_award/console_snippet.js` 내용 전체를 붙여넣고 Enter
+   (크롬이 붙여넣기를 막으면 `allow pasting` 입력 후 Enter, 다시 붙여넣기)
+3. 안내대로 페이지의 [조회]를 한 번 누르면 나머지 달은 자동 조회 → `kal_bonus_*.json` 다운로드
+4. `python -m kal_award import kal_bonus_....json` → 결과 출력
+
 ## 설치
 ```bash
 pip install -r requirements.txt

@@ -1,5 +1,7 @@
 """CLI.
 
+  python -m kal_award auto    [--origin ICN --dest CDG --from 2027-08-01]   # 자동 조회 + 결과 출력
+  python -m kal_award import  kal_bonus_....json                            # 콘솔 스니펫 결과 가져오기
   python -m kal_award capture [--headless] [--no-autofill]
   python -m kal_award analyze captures/<run>
   python -m kal_award dates   captures/<run> [--map field_map.json] [--from 2027-08-01]
@@ -45,6 +47,29 @@ def cmd_har(a):
     from .har import import_har
     import_har(Path(a.har))
     print("다음 단계: python -m kal_award analyze")
+
+
+def cmd_auto(a):
+    from .fetcher import FetchError, run_auto
+    try:
+        run = run_auto(a.origin, a.dest, date.fromisoformat(a.date_from), delay_s=a.delay)
+    except FetchError as e:
+        sys.exit(f"\n!! 조회 중단: {e}\n"
+                 "자동화 브라우저가 막혔다면 README의 '콘솔 스니펫' 방법을 사용하세요.")
+    a.run = str(run)
+    cmd_dates(a)
+
+
+def cmd_import(a):
+    import json
+    from .fetcher import save_records
+    import time
+    data = json.loads(Path(a.file).read_text(encoding="utf-8-sig"))
+    recs = data["records"] if isinstance(data, dict) else data
+    run = save_records(recs, Path("captures") / (time.strftime("%Y%m%d-%H%M%S") + "-import"))
+    print(f"imported {len(recs)} responses -> {run}")
+    a.run = str(run)
+    cmd_dates(a)
 
 
 def cmd_analyze(a):
@@ -114,14 +139,32 @@ def cmd_dates(a):
         print(f"   {fmt(o)} → {fmt(b)}  ({n}박)")
 
 
+def _result_args(p):
+    p.add_argument("--from", dest="date_from", default="2027-08-01")
+    p.add_argument("--to", dest="date_to")
+    p.add_argument("--min-stay", type=int, default=7)
+    p.add_argument("--max-stay", type=int, default=14)
+    p.add_argument("--cabin", default="P",
+                   help="E 일반석, R 프리미엄석, G 프리미엄 승급, P 프레스티지(기본), U 프레스티지 승급, F 일등석")
+    p.add_argument("--map")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="kal_award")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("capture", "analyze", "dates"):
+    for name in ("auto", "import", "capture", "analyze", "dates"):
         p = sub.add_parser(name)
         p.add_argument("--origin", default="ICN")
         p.add_argument("--dest", default="CDG")
-        if name == "capture":
+        if name == "auto":
+            _result_args(p)
+            p.add_argument("--delay", type=float, default=2.0, help="요청 간격(초), 최소 1")
+            p.set_defaults(fn=cmd_auto)
+        elif name == "import":
+            p.add_argument("file")
+            _result_args(p)
+            p.set_defaults(fn=cmd_import)
+        elif name == "capture":
             p.add_argument("--out", default="captures")
             p.add_argument("--headless", action="store_true")
             p.add_argument("--no-autofill", action="store_true")
@@ -132,17 +175,14 @@ def main(argv=None):
             p.add_argument("--top", type=int, default=3)
             p.set_defaults(fn=cmd_analyze)
         if name == "dates":
-            p.add_argument("--map")
-            p.add_argument("--from", dest="date_from", default="2027-08-01")
-            p.add_argument("--to", dest="date_to")
-            p.add_argument("--min-stay", type=int, default=7)
-            p.add_argument("--max-stay", type=int, default=14)
-            p.add_argument("--cabin", default="P", help="E 일반석, R 프리미엄석, G 프리미엄 승급, P 프레스티지(기본), U 프레스티지 승급, F 일등석")
+            _result_args(p)
             p.set_defaults(fn=cmd_dates)
     ph = sub.add_parser("har", help="크롬 개발자도구에서 저장한 HAR 파일 가져오기")
     ph.add_argument("har")
     ph.set_defaults(fn=cmd_har)
     a = ap.parse_args(argv)
+    if getattr(a, "delay", 2.0) < 1:
+        a.delay = 1.0
     a.fn(a)
 
 
