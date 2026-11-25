@@ -87,7 +87,7 @@ def test_cli_dates(tmp_path, capsys):
     shape_a(tmp_path)
     main(["dates", str(tmp_path)])
     out = capsys.readouterr().out
-    assert "프레스티지 가능 3일" in out and "2027-08-03(화) → 2027-08-12(목)  (9박)" in out
+    assert "프레스티지 보너스 가능 3일" in out and "2027-08-03(화) → 2027-08-12(목)  (9박)" in out
 
 
 def test_menu_and_blocked_search_not_misdetected(tmp_path):
@@ -157,7 +157,7 @@ def test_bonusseat_endpoint(tmp_path, capsys):
            post='{"arrivalAirport":"ICN","departureAirport":"CDG","departureDate":"20270801"}')
     main(["dates", str(tmp_path)])
     out = capsys.readouterr().out
-    assert "프레스티지 가능 1일" in out and "프레스티지 가능 2일" in out
+    assert "프레스티지 보너스 가능 1일" in out and "프레스티지 보너스 가능 2일" in out
     assert "2027-08-03(화)  KE901 12:05" in out
     assert "2027-08-03(화) → 2027-08-12(목)  (9박)" in out
     assert "2027-08-30" in out and "왕복 조합] 체류 7~14일: 1건" in out

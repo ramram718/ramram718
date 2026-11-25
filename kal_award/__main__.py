@@ -75,7 +75,9 @@ def cmd_dates(a):
     start = date.fromisoformat(a.date_from) if a.date_from else date.min
     end = date.fromisoformat(a.date_to) if a.date_to else date.max
     fwd, rev = f"{a.origin}-{a.dest}", f"{a.dest}-{a.origin}"
-    cabin_name = {"P": "프레스티지", "E": "일반석", "F": "일등석"}.get(a.cabin, a.cabin)
+    cabin_name = {"E": "일반석 보너스", "R": "프리미엄석 보너스", "G": "프리미엄석 좌석승급",
+                  "P": "프레스티지 보너스", "U": "프레스티지 좌석승급",
+                  "F": "일등석 보너스/좌석승급"}.get(a.cabin, a.cabin)
 
     if any(bonusseat.is_bonus_capture(c) for c in caps):
         avail, covered = bonusseat.parse(caps, a.cabin)
@@ -100,7 +102,8 @@ def cmd_dates(a):
             fl = avail[key][d]
             extra = "  " + ", ".join(f"{f.flight_number} {f.departure_time}" for f in fl) if fl else ""
             print(f"   {fmt(d)}{extra}")
-    out_m, in_m = set(_months(covered.get(fwd, ()))), set(_months(covered.get(rev, ())))
+    in_range = lambda k: [d for d in covered.get(k, ()) if start <= d <= end]
+    out_m, in_m = set(_months(in_range(fwd))), set(_months(in_range(rev)))
     if out_m != in_m:
         print(f"\n!! 가는 편/오는 편 조회 월이 다릅니다. 가는 편만: {sorted(out_m - in_m) or '-'}"
               f", 오는 편만: {sorted(in_m - out_m) or '-'}  → 빠진 달도 달력에서 넘겨 캡처해야 왕복 매칭이 정확합니다.")
@@ -134,7 +137,7 @@ def main(argv=None):
             p.add_argument("--to", dest="date_to")
             p.add_argument("--min-stay", type=int, default=7)
             p.add_argument("--max-stay", type=int, default=14)
-            p.add_argument("--cabin", default="P", help="frontBookingClass: P=프레스티지, E=일반석, F=일등석")
+            p.add_argument("--cabin", default="P", help="E 일반석, R 프리미엄석, G 프리미엄 승급, P 프레스티지(기본), U 프레스티지 승급, F 일등석")
             p.set_defaults(fn=cmd_dates)
     ph = sub.add_parser("har", help="크롬 개발자도구에서 저장한 HAR 파일 가져오기")
     ph.add_argument("har")

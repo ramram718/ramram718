@@ -8,7 +8,7 @@ Playwright로 [보너스 좌석 조회 페이지](https://www.koreanair.com/book
 - `POST https://www.koreanair.com/api/hmp/bonusSeatView/bonusSeatView` — **로그인 필요**
 - 요청: `{"arrivalAirport":"CDG","departureAirport":"ICN","departureDate":"20270801"}` → 해당 월 전체, 한 방향
 - 응답: `flightList[].departureDate` × `flightDetailList[]{flightNumber, departureTime, availableSeat, bookingClass, frontBookingClass}`
-- 좌석 등급 `frontBookingClass/bookingClass`: `E/X` 일반석, `P/O` 프레스티지, `F/A` 일등석, `U/Z` 미확인
+- 좌석 등급 `frontBookingClass` (페이지 범례): `E` 일반석 보너스, `R` 프리미엄석 보너스, `G` 프리미엄석 좌석승급, `P` **프레스티지석 보너스**, `U` 프레스티지석 좌석승급, `F` 일등석 보너스/좌석승급
 - 상세: `kal_award/bonusseat.py`
 
 > ⚠️ (이전 메모) 아래 자동 캡처 방식은 클라우드 환경에서 검증되지 않았습니다. 개발용 클라우드 환경에서는 사이트(Akamai)가

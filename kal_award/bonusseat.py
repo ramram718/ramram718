@@ -18,11 +18,13 @@ Response:
           "frontBookingClass": "E"},      # cabin shown in the UI
          ...]}]}
 
-Cabin codes observed (frontBookingClass / bookingClass):
-  E / X  일반석 (economy)
-  P / O  프레스티지석 (prestige)
-  F / A  일등석 (first) — only on flights that have a first cabin
-  U / Z  not yet confirmed against the UI (present on every ICN-CDG flight)
+frontBookingClass = the letter in the page's legend (confirmed from the UI):
+  E 일반석 보너스            (bookingClass X)
+  R 프리미엄석 보너스        (not seen on ICN-CDG)
+  G 프리미엄석 좌석승급      (not seen on ICN-CDG)
+  P 프레스티지석 보너스      (bookingClass O)   <- default target
+  U 프레스티지석 좌석승급    (bookingClass Z)
+  F 일등석 보너스/좌석승급   (bookingClass A) — only on flights with a first cabin
 """
 from __future__ import annotations
 
@@ -32,7 +34,8 @@ from dataclasses import dataclass
 from datetime import date, datetime
 
 ENDPOINT = "/api/hmp/bonusSeatView/bonusSeatView"
-CABINS = {"economy": "E", "prestige": "P", "first": "F"}
+CABINS = {"E": "일반석 보너스", "R": "프리미엄석 보너스", "G": "프리미엄석 좌석승급",
+          "P": "프레스티지석 보너스", "U": "프레스티지석 좌석승급", "F": "일등석 보너스/좌석승급"}
 
 
 @dataclass(frozen=True)
