@@ -16,6 +16,8 @@ Flow (selectors from someone who runs this page regularly):
 """
 from __future__ import annotations
 
+from .browser import SANDBOX
+
 import json
 import re
 import threading
@@ -30,6 +32,72 @@ AIRPORT_OPTION = {
 }
 DAY_NAME_RE = re.compile(r"^\s*(\d{1,2})일,\s*\S+요일")
 PRESTIGE_AWARD = "프레스티지석 보너스"
+
+
+COOKIE_BUTTONS = [  # narrowest consent first
+    re.compile(r"필수.*(쿠키)?.*(허용|동의|저장)"),
+    re.compile(r"(선택|설정).*(저장|확인)"),
+    re.compile(r"(모두|전체|모든).*(허용|동의|수락)"),
+]
+
+
+def dismiss_cookie_banner(page) -> bool:
+    """Close the '더 편리한 이용을 위해 쿠키를 사용합니다' layer if it is showing."""
+    if not page.get_by_text("쿠키를 사용합니다").first.is_visible():
+        return False
+    for pat in COOKIE_BUTTONS:
+        btn = page.get_by_role("button", name=pat)
+        if btn.count() and btn.first.is_visible():
+            name = btn.first.inner_text().strip()
+            force_click(page, btn.first, "쿠키 " + name)
+            print(f"  쿠키 안내 닫음: [{name}]")
+            page.wait_for_timeout(800)
+            return True
+    return False
+
+
+def wait_until_ready(page, timeout_s: int = 90) -> None:
+    """Wait out the 5-10 s loader; close the cookie layer while waiting."""
+    deadline = time.time() + timeout_s
+    heading = page.get_by_role("heading", name="보너스 좌석 조회")
+    from_btn = page.get_by_role("button", name="From 출발지")
+    while time.time() < deadline:
+        try:
+            dismiss_cookie_banner(page)
+        except Exception:
+            pass
+        if heading.first.is_visible() or from_btn.first.is_visible():
+            dismiss_cookie_banner(page)
+            return
+        page.wait_for_timeout(1000)
+    raise PageNotReady("'보너스 좌석 조회' 화면이 %d초 안에 나타나지 않았습니다" % timeout_s)
+
+
+class PageNotReady(RuntimeError):
+    pass
+
+
+def dump_diagnostics(page, out_dir: Path) -> Path:
+    """Screenshot + what is on screen, so a failure can be diagnosed remotely."""
+    d = out_dir / (time.strftime("%Y%m%d-%H%M%S") + "-debug")
+    d.mkdir(parents=True, exist_ok=True)
+    try:
+        page.screenshot(path=str(d / "screen.png"), full_page=True)
+    except Exception:
+        pass
+    info = {"url": page.url, "title": "", "headings": [], "buttons": [], "dialogs": []}
+    try:
+        info["title"] = page.title()
+        info["headings"] = page.get_by_role("heading").all_inner_texts()[:40]
+        info["buttons"] = [b.strip()[:60] for b in page.get_by_role("button").all_inner_texts() if b.strip()][:80]
+        info["dialogs"] = [t.strip()[:200] for t in page.get_by_role("dialog").all_inner_texts()][:5]
+    except Exception as e:
+        info["error"] = repr(e)
+    (d / "page.json").write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
+    print("\n=== 진단 정보 ===")
+    print(json.dumps(info, ensure_ascii=False, indent=1)[:3000])
+    print(f"(화면 캡처: {d / 'screen.png'})")
+    return d
 
 
 def force_click(page, locator, what: str, timeout: int = 10000) -> None:
@@ -100,7 +168,8 @@ def run_ui(origin: str = "ICN", dest: str = "CDG", out_month: date = date(2027, 
     responses: list = []
     with sync_playwright() as p:
         launch = dict(headless=headless, locale="ko-KR", timezone_id="Asia/Seoul",
-                      viewport={"width": 1400, "height": 950})
+                      viewport={"width": 1400, "height": 950},
+                      chromium_sandbox=SANDBOX)  # no --no-sandbox warning bar
         if executable_path:
             ctx = p.chromium.launch_persistent_context(str(profile_dir), executable_path=executable_path, **launch)
         else:
@@ -114,7 +183,7 @@ def run_ui(origin: str = "ICN", dest: str = "CDG", out_month: date = date(2027, 
         def search_once():
             page.goto(page_url, wait_until="domcontentloaded", timeout=60000)
             print("페이지 로딩 대기 (보너스 좌석 조회 제목)...")
-            page.get_by_role("heading", name="보너스 좌석 조회").wait_for(timeout=60000)
+            wait_until_ready(page)
             choose_airport(page, "from", origin)
             choose_airport(page, "to", dest)
             choose_months(page, out_month, in_month)
@@ -126,7 +195,19 @@ def run_ui(origin: str = "ICN", dest: str = "CDG", out_month: date = date(2027, 
                 page.wait_for_timeout(500)
             return [r for r in responses]
 
-        got = search_once()
+        try:
+            got = search_once()
+        except Exception as e:
+            print(f"\n!! 화면 조작 중 멈춤: {type(e).__name__}: {str(e).splitlines()[0]}")
+            dump_diagnostics(page, out_dir)
+            if not headless:
+                print(">> 브라우저 창 상태를 확인한 뒤 이 터미널에서 Enter를 누르면 종료합니다.")
+                done = threading.Event()
+                threading.Thread(target=lambda: (input(), done.set()), daemon=True).start()
+                while not done.is_set():
+                    page.wait_for_timeout(500)
+            ctx.close()
+            raise RuntimeError("화면 조작 실패 — 위 진단 정보와 화면 캡처를 확인하세요") from None
         ok = [r for r in got if r.status == 200]
         if len(ok) < 2:
             print(f"\n!! bonusSeatView 정상 응답 {len(ok)}/2건 — 로그인이 필요할 수 있습니다.\n"

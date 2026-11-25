@@ -11,6 +11,8 @@ Each captured exchange is written to captures/<run>/NNN.json as:
 """
 from __future__ import annotations
 
+from .browser import SANDBOX
+
 import json
 import re
 import threading
@@ -89,7 +91,7 @@ def capture(out_dir: Path, headless: bool = False, autofill: bool = True,
     with sync_playwright() as p:
         ctx = p.chromium.launch_persistent_context(
             str(profile_dir), headless=headless, locale="ko-KR",
-            timezone_id="Asia/Seoul", viewport={"width": 1400, "height": 950},
+            timezone_id="Asia/Seoul", viewport={"width": 1400, "height": 950}, chromium_sandbox=SANDBOX,
         )
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
 

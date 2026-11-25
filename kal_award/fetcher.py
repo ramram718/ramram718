@@ -17,6 +17,8 @@ the run stops and reports it rather than retrying.
 """
 from __future__ import annotations
 
+from .browser import SANDBOX
+
 import calendar
 import json
 import time
@@ -101,7 +103,7 @@ def run_auto(origin: str, dest: str, from_date: date, out_dir: Path = Path("capt
 
     with sync_playwright() as p:
         launch = dict(headless=headless, locale="ko-KR", timezone_id="Asia/Seoul",
-                      viewport={"width": 1300, "height": 900})
+                      viewport={"width": 1300, "height": 900}, chromium_sandbox=SANDBOX)
         if executable_path:
             ctx = p.chromium.launch_persistent_context(str(profile_dir), executable_path=executable_path, **launch)
         else:

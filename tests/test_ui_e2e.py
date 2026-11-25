@@ -36,4 +36,5 @@ def test_ui_flow_against_fake_site(tmp_path, monkeypatch, capsys):
     assert "2027-09-03(금)  KE901" in out and "2027-09-17(금)" in out      # P open (17 also has U)
     assert "2027-09-05" not in out and "2027-09-06" not in out            # U-only days excluded
     assert "2027-09-03(금) → 2027-09-12(일)  (9박)" in out
+    assert "쿠키 안내 닫음: [필수 쿠키만 허용]" in out
     assert "가는 날: 일치 (2일)" in out and "오는 날: 일치 (2일)" in out

@@ -13,7 +13,10 @@ kds-button_1{display:inline-block;position:relative;padding:6px 12px;border:1px 
 kds-button_1 .shield{position:absolute;inset:0;z-index:5}  /* swallows normal clicks */
 dialog{display:block} [hidden]{display:none!important}</style></head><body>
 <div id=loader>진행중 잠시만 기다려 주세요.</div>
-<main id=main hidden><h1>보너스 좌석 조회</h1>
+<div id=cookie style="position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.4)"><div style="background:#fff;margin:200px auto;width:500px">
+<p>더 편리한 이용을 위해 쿠키를 사용합니다</p><button onclick="document.getElementById('cookie').remove()">쿠키 설정</button>
+<button onclick="document.getElementById('cookie').remove()">필수 쿠키만 허용</button><button onclick="document.getElementById('cookie').remove()">모두 허용</button></div></div>
+<main id=main hidden><h1 id=title>보너스 좌석 조회</h1>
 <button aria-label="From 출발지" onclick="openAp('from')">출발지</button>
 <button aria-label="To 도착지" onclick="openAp('to')">도착지</button>
 <button aria-label="탑승월 가는 달 오는 달" onclick="mon.hidden=false">탑승월</button>
@@ -26,7 +29,7 @@ dialog{display:block} [hidden]{display:none!important}</style></head><body>
 <script>
 const AP={ICN:'서울/인천, 대한민국 ICN',CDG:'파리/샤를 드 골, 프랑스 CDG',NRT:'도쿄/나리타, 일본 NRT'};
 let side, st={from:null,to:null,months:[]};
-setTimeout(()=>{loader.hidden=true;main.hidden=false},3000);
+setTimeout(()=>{loader.hidden=true;main.hidden=false;if(location.search.includes('broken'))title.remove(),document.querySelector('[aria-label="From 출발지"]').remove()},3000);
 function openAp(s){side=s;ap.hidden=false;apq.value='';apq.setAttribute('aria-label',s=='from'?'출발지 검색':'도착지 검색');apl.innerHTML=''}
 function opts(){apl.innerHTML='';for(const[k,v]of Object.entries(AP)){if(v.includes(apq.value.toUpperCase())){const li=document.createElement('li');li.setAttribute('role','option');li.textContent=v;li.onclick=()=>{st[side]=k;ap.hidden=true};apl.append(li)}}}
 document.querySelectorAll('[aria-label="2027"] button').forEach(b=>b.onclick=()=>st.months.push(2027*100+parseInt(b.textContent)));
