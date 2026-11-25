@@ -15,6 +15,11 @@ Playwright로 [보너스 좌석 조회 페이지](https://www.koreanair.com/book
 > `Access Denied`를 반환해 접속하지 못했습니다. 아래 1~3단계를 **본인 PC(가정용 IP, 실제 브라우저 창)**에서
 > 실행해 실제 필드를 확인해야 합니다. 테스트(`tests/`)는 임의로 만든 가상 응답으로 로직만 검증합니다.
 
+## Windows에서 가장 쉬운 사용법
+- 처음 한 번: `setup.bat` 더블클릭 (패키지와 브라우저 설치)
+- 매번: `run.bat` 더블클릭 → (git으로 받은 폴더면 최신 버전 자동 업데이트) → 조회 → 결과 출력
+- 다른 달: 명령창에서 `run.bat --out-month 2027-09 --in-month 2027-10`
+
 ## 화면 조작 방식 (권장) ★
 ```bash
 pip install -r requirements.txt
