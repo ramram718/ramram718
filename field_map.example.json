@@ -1,0 +1,9 @@
+{
+  "date_key": "departureDate",
+  "avail_key": "seatStatus",
+  "cabin_key": "cabinClass",
+  "cabin_match": "PRESTIGE",
+  "origin_key": "departureAirport",
+  "dest_key": "arrivalAirport",
+  "record_path": null
+}
