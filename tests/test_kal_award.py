@@ -108,3 +108,26 @@ def test_menu_and_blocked_search_not_misdetected(tmp_path):
     assert detect_field_map(caps, today=date(2026, 11, 25)) is None
     text = describe(caps)
     assert "Access Denied" in text and "002.json" in text
+
+
+def test_har_import(tmp_path, monkeypatch):
+    """HAR saved from the user's own Chrome -> same pipeline (synthetic)."""
+    import base64
+    from kal_award.har import import_har
+    entries = []
+    for o, t, ok in (("ICN", "CDG", OUT_OK), ("CDG", "ICN", IN_OK)):
+        body = json.dumps({"result": [{"flightDate": d.strftime("%Y%m%d"), "prestigeYn": "Y" if d in ok else "N"}
+                                      for d in days()]})
+        entries.append({"request": {"method": "POST", "url": "https://www.koreanair.com/api/award/x",
+                                    "postData": {"text": json.dumps({"from": o, "to": t})}},
+                        "response": {"status": 200, "content": {"mimeType": "application/json",
+                                     "encoding": "base64", "text": base64.b64encode(body.encode()).decode()}}})
+    entries.append({"request": {"method": "GET", "url": "https://www.koreanair.com/main.js"},
+                    "response": {"status": 200, "content": {"mimeType": "text/javascript", "text": "x"}}})
+    entries.append({"request": {"method": "GET", "url": "https://other.example.com/api"},
+                    "response": {"status": 200, "content": {"mimeType": "application/json", "text": "{}"}}})
+    har = tmp_path / "a.har"
+    har.write_text(json.dumps({"log": {"entries": entries}}), encoding="utf-8")
+    run = import_har(har, tmp_path / "captures")
+    assert len(list(run.glob("*.json"))) == 2
+    check(run)

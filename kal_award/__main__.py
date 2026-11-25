@@ -41,6 +41,12 @@ def latest_run(arg: str | None) -> Path:
     return runs[-1]
 
 
+def cmd_har(a):
+    from .har import import_har
+    import_har(Path(a.har))
+    print("다음 단계: python -m kal_award analyze")
+
+
 def cmd_analyze(a):
     a.run = latest_run(a.run)
     caps = load_captures(Path(a.run))
@@ -114,6 +120,9 @@ def main(argv=None):
             p.add_argument("--min-stay", type=int, default=7)
             p.add_argument("--max-stay", type=int, default=14)
             p.set_defaults(fn=cmd_dates)
+    ph = sub.add_parser("har", help="크롬 개발자도구에서 저장한 HAR 파일 가져오기")
+    ph.add_argument("har")
+    ph.set_defaults(fn=cmd_har)
     a = ap.parse_args(argv)
     a.fn(a)
 

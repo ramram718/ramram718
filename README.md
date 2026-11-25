@@ -24,6 +24,16 @@ python -m kal_award capture
   넘기고(가는 편·오는 편 모두), 터미널에서 Enter를 누릅니다.
 - 응답은 `captures/<시각>/NNN.json`에 `{url, method, request_post_data, response_json}` 형태로 저장됩니다.
 
+## 1-B. (자동화 브라우저에서 조회 결과가 안 나올 때) 평소 쓰는 크롬에서 HAR 저장
+자동화된 브라우저에서는 사이트가 조회 결과를 보여 주지 않을 수 있습니다. 그럴 때는:
+1. 평소 쓰는 크롬으로 보너스 좌석 조회 페이지를 열고 로그인
+2. **F12** → **Network** 탭 → 왼쪽 위 ⦸(Clear) 클릭, **Preserve log** 체크
+3. ICN→CDG, 프레스티지, 성인 1명으로 조회하고 달력을 2027년 8월 ~ 마지막 달까지 넘기기 (가는 편·오는 편)
+4. Network 목록 아무 줄에서 오른쪽 클릭 → **Save all as HAR with content** → 프로그램 폴더에 `kal.har`로 저장
+5. `python -m kal_award har kal.har`
+
+HAR 파일에는 로그인 쿠키 등 개인정보가 들어 있으니 다른 사람에게 공유하지 마세요.
+
 ## 2. 구조 분석
 ```bash
 python -m kal_award analyze            # 폴더 생략 시 가장 최근 캡처
